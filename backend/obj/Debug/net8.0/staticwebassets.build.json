@@ -1,0 +1,11 @@
+{
+  "Version": 1,
+  "Hash": "G601/vZwe1pPcN/WeRgV6z9p/ki7Kp5RKNQFb4UdZxM=",
+  "Source": "PharmacyAPI",
+  "BasePath": "_content/PharmacyAPI",
+  "Mode": "Default",
+  "ManifestType": "Build",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [],
+  "Assets": []
+}

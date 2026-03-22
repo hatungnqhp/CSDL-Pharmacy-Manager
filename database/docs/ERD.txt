@@ -1,0 +1,112 @@
+erDiagram
+    PRODUCT {
+        int prod_id PK
+        int category_id FK
+        string prod_national_code "Mã dược quốc gia (Nullable)"
+
+        string prod_name "Tên thương mại của sản phẩm"
+        string prod_registration_number "Số đăng ký lưu hành"
+        string prod_active_ingredient "Hoạt chất chính (Dùng để tìm kiếm thuốc thay thế)"
+        string prod_registration_ingredient "Hoạt chất đăng ký"
+        string prod_dosage "Hàm lượng"
+        string prod_manufacturer "Tên nhà sản xuất"
+        string prod_country "Quốc gia sản xuất"
+    }
+    CATEGORY {
+        int category_id PK
+        string category_name "Tên nhóm"
+        string category_description "Mô tả nhóm"
+    }
+    PRODUCT_UNIT {
+        int prod_unit_id PK
+        int prod_id FK
+        string prod_unit_name "Tên đơn vị"
+        int prod_unit_exchange_value "Giá trị quy đổi"
+        decimal prod_unit_price "Giá bán niêm yết"
+    }
+
+    PURCHASE_INVOICE {
+        int pur_inv_id PK "Mã đơn hàng nhập"
+        string pur_inv_supplier_invoice_code "Số hóa đơn NCC (Do bên bán cấp)"
+        int staff_id FK
+        int supplier_id FK
+
+        datetime pur_inv_received_date "Ngày nhập hàng"
+        datetime pur_inv_invoice_date "Ngày hóa đơn"
+
+        decimal pur_inv_total_product_value "Tổng tiền hàng (Chưa thuế/CK)"
+        decimal pur_inv_total_discount "Tổng chiết khấu"
+        decimal pur_inv_total_vat "Tổng tiền thuế VAT"
+        decimal pur_inv_amount_paid "Số tiền đã trả thực tế"
+
+        string pur_inv_note "Ghi chú"
+    }
+    STAFF {
+        int staff_id PK
+        string staff_full_name
+        datetime staff_birth_date
+        string staff_phone
+    }
+    SUPPLIER {
+        int supplier_id PK
+        string supplier_name
+        string supplier_phone
+    }
+    BATCH {
+        int batch_id PK "Mã lô hàng"
+        int prod_id FK
+        int pur_inv_id FK
+        int prod_unit_id FK "Đơn vị nhập" FK
+
+        int batch_import_qty_pkg "Số lượng nhập (Đơn vị nhập)"
+        int batch_current_qty_base "Số lượng tồn (Đơn vị cơ bản)"
+
+        string batch_number "Số lô sản xuất"
+        date batch_manufacturing_date "Ngày sản xuất"
+        date batch_expiry_date "Hạn sử dụng"
+
+        decimal batch_cost_price_unit "Giá nhập hàng"
+        int batch_discount_amount "Tiền chiết khấu (%)"
+        int batch_vat_amount "Tiền VAT (%)"
+    }
+
+    SELL_INVOICE {
+        int sell_inv_id PK
+        int staff_id FK
+        int customer_id FK
+
+        datetime sell_inv_date "Ngày bán hàng"
+        decimal sell_inv_total "Tổng tiền hàng"
+    }
+    SELL_INVOICE_DETAIL {
+        int sell_inv_dtl_id PK
+        int sell_inv_id FK
+        int batch_id FK
+
+        decimal prod_unit_price "Đơn giá thực tế"
+        int prod_unit_id FK "Đơn vị bán"
+        int sell_inv_dtl_sell_qty_pkg "Số lượng bán"
+    }
+    CUSTOMER {
+        int customer_id PK
+        string customer_name
+        string customer_phone
+        string customer_address
+        string customer_medical_history "Tiền sử bệnh/Dị ứng"
+    }
+
+    CATEGORY ||--o{ PRODUCT : "categorizes"
+    PRODUCT ||--o{ PRODUCT_UNIT : "has units"
+    PRODUCT ||--o{ BATCH : "managed by batches"
+
+    SUPPLIER ||--o{ PURCHASE_INVOICE : "supplies"
+    STAFF ||--o{ PURCHASE_INVOICE : "creates"
+    PURCHASE_INVOICE ||--o{ BATCH : "contains items"
+
+    STAFF ||--o{ SELL_INVOICE : "issues"
+    CUSTOMER ||--o{ SELL_INVOICE : "purchases"
+    SELL_INVOICE ||--o{ SELL_INVOICE_DETAIL : "consists of"
+
+    BATCH ||--o{ SELL_INVOICE_DETAIL : "sourced from"
+    PRODUCT_UNIT ||--o{ SELL_INVOICE_DETAIL : "sold as"
+    PRODUCT_UNIT ||--o{ BATCH : "imported as"
