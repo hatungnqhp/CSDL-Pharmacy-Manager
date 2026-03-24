@@ -46,3 +46,4 @@
 /Users/hatungg/Documents/PTIT/S3/CSDL/CSDL Project/backend/obj/Debug/net8.0/PharmacyAPI.pdb
 /Users/hatungg/Documents/PTIT/S3/CSDL/CSDL Project/backend/obj/Debug/net8.0/PharmacyAPI.genruntimeconfig.cache
 /Users/hatungg/Documents/PTIT/S3/CSDL/CSDL Project/backend/obj/Debug/net8.0/ref/PharmacyAPI.dll
+/Users/hatungg/Documents/PTIT/S3/CSDL/CSDL Project/backend/obj/Debug/net8.0/PharmacyAPI.sourcelink.json

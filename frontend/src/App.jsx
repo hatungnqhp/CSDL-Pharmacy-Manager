@@ -1,20 +1,151 @@
 import React, { useState, useEffect } from 'react';
 import dayjs from 'dayjs';
-import { Form, Input, Button, DatePicker, InputNumber, Select, Card, Space, message, Divider, Typography } from 'antd';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
+import { Table, Form, Input, Button, DatePicker, InputNumber, Select, Card, Space, message, Divider, Typography, Modal } from 'antd';
 import axios from 'axios';
 import { PlusOutlined, DeleteOutlined, SaveOutlined, MedicineBoxOutlined, DropboxOutlined } from '@ant-design/icons';
 
-const { Title } = Typography;
+const { Title, Text, Paragraph } = Typography;
 const API_BASE = "http://localhost:5223/api";
 
+dayjs.extend(utc);
+dayjs.extend(timezone);
+dayjs.tz.setDefault("Asia/Ho_Chi_Minh");
+
 const App = () => {
+  const [invoices, setInvoices] = useState([]);
+  const [filterStatus, setFilterStatus] = useState('all'); // 'all', 'done', 'pending'
+  const [isConfirmModalVisible, setIsConfirmModalVisible] = useState(false);
+  const [selectedInvoice, setSelectedInvoice] = useState(null);
+  const [confirmDate, setConfirmDate] = useState(dayjs());
   const [form] = Form.useForm();
   const [batches, setBatches] = useState([{ key: Date.now() }]);
   const [suppliers, setSuppliers] = useState([]);
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  const watchedValues = Form.useWatch(['pur_inv_total_vat', 'pur_inv_total_discount'], form);
+  const fetchInvoices = async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/PurchaseInvoice`);
+      setInvoices(res.data);
+    } catch (e) {
+      console.error("Lỗi tải danh sách hóa đơn:", e);
+    }
+  };
+
+  const filteredInvoices = invoices.filter(inv => {
+    if (filterStatus === 'all') return true;
+    if (filterStatus === 'done') return !!inv.pur_inv_received_date;
+    if (filterStatus === 'pending') return !inv.pur_inv_received_date;
+    return true;
+  });
+
+  const showConfirmModal = (record) => {
+    setSelectedInvoice(record);
+    setConfirmDate(dayjs());
+    setIsConfirmModalVisible(true);
+  };
+
+  const handleConfirmOk = async () => {
+    if (!selectedInvoice) return;
+
+    try {
+      const formattedDate = confirmDate.toISOString();
+      
+      await axios.patch(
+        `${API_BASE}/PurchaseInvoice/${selectedInvoice.pur_inv_id}/confirm-receipt`, 
+        JSON.stringify(formattedDate), 
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+
+      message.success("Xác nhận nhập kho thành công");
+      setIsConfirmModalVisible(false);
+      await fetchInvoices();
+    } catch (e) {
+      const errorMsg = e.response?.data || "Lỗi xác nhận";
+      message.error(errorMsg);
+    }
+  };
+
+  const invoiceColumns = [
+    {
+      title: 'Mã hóa đơn NCC',
+      dataIndex: 'pur_inv_supplier_invoice_code',
+      key: 'code',
+      width: 150,
+      render: (text) => {return text || "N/A"}
+    },
+    {
+      title: 'Ngày hóa đơn',
+      dataIndex: 'pur_inv_invoice_date',
+      key: 'invoice_date',
+      width: 150,
+      sorter: (a, b) => dayjs(a.pur_inv_invoice_date).unix() - dayjs(b.pur_inv_invoice_date).unix(),
+      defaultSortOrder: 'descend', 
+      render: (date) => dayjs(date).format('DD/MM/YYYY')
+    },
+    {
+      title: 'Ngày nhập',
+      dataIndex: 'pur_inv_received_date',
+      key: 'date',
+      width: 180,
+      hidden: filterStatus === 'pending',
+      render: (date) => date ? dayjs.utc(date).local().format('DD/MM/YYYY HH:mm') : <span style={{ fontStyle: 'italic' }}>Chưa nhập kho</span>,
+    },
+    {
+      title: 'Nhập hàng',
+      key: 'action',
+      width: 180,
+      hidden: filterStatus !== 'pending',
+      render: (_, record) => (
+        !record.pur_inv_received_date && (
+          <Button 
+            type="link" 
+            size="small" 
+            icon={<PlusOutlined />} 
+            onClick={() => showConfirmModal(record)}
+          >
+            Xác nhận nhập
+          </Button>
+        )
+      ),
+    },
+    {
+      title: 'Nhà cung cấp',
+      dataIndex: 'supplier_id',
+      key: 'supplier',
+      width: 250,
+      render: (supId) => {
+        const supplier = suppliers.find(s => s.supplier_id === supId);
+        return supplier ? supplier.supplier_name : "N/A";
+      }
+    },
+    {
+      title: 'Tổng tiền',
+      dataIndex: 'pur_inv_total_product_value',
+      key: 'total',
+      width: 150,
+      render: (val) => `${val?.toLocaleString()}`,
+      align: 'right'
+    },
+    {
+      title: 'Cần trả NCC',
+      dataIndex: 'remainingDebt',
+      key: 'remainingDebt',
+      width: 150,
+      render: (val) => {
+        return (
+          <span style={{ 
+            color: val === 0 || !val ? '#52c41a' : '#f5222d', 
+          }}>
+            {val?.toLocaleString() || 0}
+          </span>
+        );
+      },
+      align: 'right'
+    },
+  ];
 
   const calculateSummary = () => {
     const values = form.getFieldsValue();
@@ -25,19 +156,14 @@ const App = () => {
       return sum + (qty * cost);
     }, 0);
 
-    // 2. Lấy các giá trị trực tiếp (Số tiền, không phải tỷ lệ)
     const totalVat = values.pur_inv_total_vat || 0;
     const totalDiscount = values.pur_inv_total_discount || 0;
-    
-    // 3. Tổng cộng cuối cùng của hóa đơn
     const finalAmount = totalProductValue + totalVat - totalDiscount;
+    const amountPaid = values.pur_inv_amount_paid || 0;
+    const remainingDebt = finalAmount - amountPaid;
 
-    return { totalProductValue, totalVat, totalDiscount, finalAmount };
+    return { totalProductValue, totalVat, totalDiscount, finalAmount, remainingDebt };
   };
-
-  const summary = calculateSummary();
-
-
 
   // Load dữ liệu ban đầu
   useEffect(() => {
@@ -49,6 +175,7 @@ const App = () => {
         ]);
         setSuppliers(resSupp.data);
         setProducts(resProd.data);
+        await fetchInvoices();
       } catch (e) { message.error("Fail to load initial data"); }
     };
     fetchData();
@@ -83,6 +210,7 @@ const App = () => {
 
   const onFinish = async (values) => {
     setLoading(true);
+    const summary = calculateSummary();
     try {
       const payload = {
         pur_inv_supplier_invoice_code: values.pur_inv_supplier_invoice_code,
@@ -105,12 +233,12 @@ const App = () => {
           batch_cost_price_unit: values[`cost_${b.key}`],
           batch_expiry_date: values[`expiry_${b.key}`]?.toISOString(),
         }))
-    };
-    
-    await axios.post(`${API_BASE}/PurchaseInvoice`, payload);
-    message.success("Nhập kho thành công");
-    form.resetFields();
-    setBatches([{ key: Date.now() }]);
+      };
+      await axios.post(`${API_BASE}/PurchaseInvoice`, payload);
+      message.success("Nhập kho thành công");
+      await fetchInvoices();
+      form.resetFields();
+      setBatches([{ key: Date.now() }]);
     } catch (e) { 
       const errorMsg = e.response?.data?.title || e.response?.data || e.message;
       message.error("Lỗi nhập kho: " + (typeof errorMsg === 'object' ? JSON.stringify(errorMsg) : errorMsg));
@@ -121,9 +249,43 @@ const App = () => {
 
   return (
     <div style={{ padding: '20px', background: '#f0f2f5', minHeight: '100vh' }}>
-      <Card shadow="sm">
-        <Title level={3}>Nhập hàng <DropboxOutlined/></Title>
-        <Form 
+      {/* PHẦN 1: DANH SÁCH CÁC LẦN NHẬP HÀNG */}
+      <Card 
+        title={<><MedicineBoxOutlined /> Lịch sử nhập hàng</>} 
+        shadow="sm"
+        extra={
+          <Space>
+            <span>Trạng thái:</span>
+            <Select 
+              defaultValue="all" 
+              style={{ width: 160 }} 
+              onChange={(value) => setFilterStatus(value)}
+              options={[
+                { value: 'all', label: 'Tất cả' },
+                { value: 'done', label: 'Đã nhập kho' },
+                { value: 'pending', label: 'Chờ kiểm hàng' },
+              ]}
+            />
+          </Space>
+        }
+      >
+        <Table 
+          dataSource={filteredInvoices}
+          columns={invoiceColumns} 
+          rowKey="pur_inv_id" 
+          pagination={{ pageSize: 10 }}
+          styles={{ 
+            body: { minHeight: '600px' },
+            content: { minHeight: '600px' } 
+          }}
+        />
+      </Card>
+      
+      <div style={{ marginTop: '30px' }}></div>
+      
+      {/* PHẦN 2: FORM TẠO PHIẾU NHẬP */}
+      <Card title={<><SaveOutlined /> Tạo phiếu nhập mới</>} shadow="sm">
+         <Form 
           form={form} 
           layout="vertical" 
           onFinish={onFinish} 
@@ -149,15 +311,33 @@ const App = () => {
                 }))}
               />
             </Form.Item>
-            <Form.Item name="pur_inv_invoice_date" label="Ngày hóa đơn"><DatePicker/></Form.Item>
-            <Form.Item name="pur_inv_received_date" label="Ngày nhập kho"><DatePicker/></Form.Item>
+            <Form.Item name="pur_inv_invoice_date" label="Ngày hóa đơn" rules={[{required: true}]}> 
+              <DatePicker
+                format="DD/MM/YYYY"
+                value={form.getFieldValue('pur_inv_invoice_date')}
+                onChange={(date) => form.setFieldsValue({ pur_inv_invoice_date: date })}
+                style={{ width: '100%' }}
+                allowClear={false}
+              /> 
+            </Form.Item>
+            <Form.Item name="pur_inv_received_date" label="Ngày nhập kho" rules={[{required: false}]}>
+              <DatePicker 
+                showTime 
+                format="DD/MM/YYYY HH:mm"
+                value={form.getFieldValue('pur_inv_received_date')}
+                onChange={(date) => form.setFieldsValue({ pur_inv_received_date: date })}
+                placeholder="Chưa nhập kho" 
+                style={{ width: '100%' }} 
+                allowClear={true}
+              />
+            </Form.Item>
           </Space>
 
           <Divider titlePlacement="left">Danh sách thuốc nhập</Divider>
 
           {/* 2. Body: Danh sách các dòng thuốc nhập (Batches) */}
           {batches.map(batch => (
-            <div key={batch.key} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', marginbottom: '12px', background: '#fafafa', padding: '12px', borderRadius: '8px' }}>
+            <div key={batch.key} style={{ display: 'flex', gap: '8px', alignItems: 'flex-start', marginBottom: '12px', background: '#fafafa', padding: '12px', borderRadius: '8px' }}>
               <Form.Item name={`prod_id_${batch.key}`} label="Thuốc" style={{flex: 3}} rules={[{required: true}]}>
               <Select 
                 showSearch={{
@@ -174,7 +354,7 @@ const App = () => {
               <Form.Item name={`batch_number_${batch.key}`} label="Số lô" style={{flex: 1.5}} rules={[{required: false}]}>
                 <Input placeholder="Nhập số lô..." />
               </Form.Item>
-              <Form.Item shouldUpdate={(prev, curr) => prev[`prod_id_${batch.key}`] !== curr[`prod_id_${batch.key}`]} style={{flex: 2, marginbottom: 0}}>
+              <Form.Item shouldUpdate={(prev, curr) => prev[`prod_id_${batch.key}`] !== curr[`prod_id_${batch.key}`]} style={{flex: 2, marginBottom: 0}}>
                 {() => (
                   <Form.Item name={`prod_unit_id_${batch.key}`} label="Đơn vị" rules={[{required: true}]}>
                     <Select 
@@ -206,7 +386,7 @@ const App = () => {
           <Divider titlePlacement="left">Chi tiết thanh toán</Divider>
             <Form.Item shouldUpdate>
               {() => {
-                const summary = calculateSummary(); // Gọi hàm tính toán tại đây
+                const summary = calculateSummary();
                 return (
                   <div style={{ background: '#fff', padding: '20px', borderRadius: '8px', border: '1px solid #d9d9d9' }}>
                     <Space size="large" align="start">
@@ -240,6 +420,29 @@ const App = () => {
           </div>
         </Form>
       </Card>
+
+      <Modal
+        title="Xác nhận ngày nhập kho"
+        open={isConfirmModalVisible}
+        onOk={handleConfirmOk}
+        onCancel={() => setIsConfirmModalVisible(false)}
+        okText="Xác nhận nhập"
+        cancelText="Hủy"
+      >
+        <div style={{ marginBottom: '15px' }}>
+          Hóa đơn: <b>{selectedInvoice?.pur_inv_supplier_invoice_code || "N/A"}</b>
+        </div>
+        <p>Vui lòng chọn ngày thực tế hàng về kho:</p>
+        <DatePicker 
+          showTime 
+          format="DD/MM/YYYY HH:mm"
+          value={confirmDate}
+          onChange={(date) => setConfirmDate(date)}
+          style={{ width: '100%' }}
+          allowClear={false}
+        />
+      </Modal>
+
     </div>
   );
 };

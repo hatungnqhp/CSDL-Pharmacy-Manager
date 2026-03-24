@@ -31,8 +31,8 @@ erDiagram
         int staff_id FK
         int supplier_id FK
 
+        date pur_inv_invoice_date "Ngày hóa đơn"
         datetime pur_inv_received_date "Ngày nhập hàng"
-        datetime pur_inv_invoice_date "Ngày hóa đơn"
 
         decimal pur_inv_total_product_value "Tổng tiền hàng (Chưa thuế/CK)"
         decimal pur_inv_total_discount "Tổng chiết khấu"
@@ -56,7 +56,7 @@ erDiagram
         int batch_id PK "Mã lô hàng"
         int prod_id FK
         int pur_inv_id FK
-        int prod_unit_id FK "Đơn vị nhập" FK
+        int prod_unit_id FK "Đơn vị nhập"
 
         int batch_import_qty_pkg "Số lượng nhập (Đơn vị nhập)"
         int batch_current_qty_base "Số lượng tồn (Đơn vị cơ bản)"

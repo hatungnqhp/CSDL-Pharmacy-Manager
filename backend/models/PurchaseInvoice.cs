@@ -10,7 +10,7 @@ namespace PharmacyAPI.Models
         public string? pur_inv_supplier_invoice_code { get; set; }
         [Required] public int staff_id { get; set; }
         [Required] public int supplier_id { get; set; }
-        public DateTime pur_inv_invoice_date { get; set; } = DateTime.Now;
+        public DateOnly pur_inv_invoice_date { get; set; }
         public DateTime? pur_inv_received_date { get; set; }
         [Column(TypeName = "decimal(18,2)")] public decimal pur_inv_total_product_value { get; set; }
         [Column(TypeName = "decimal(18,2)")] public decimal pur_inv_total_discount { get; set; }

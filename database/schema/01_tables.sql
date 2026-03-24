@@ -58,7 +58,7 @@ CREATE TABLE PURCHASE_INVOICE (
     supplier_id INT NOT NULL,
 
     pur_inv_received_date DATETIME DEFAULT CURRENT_TIMESTAMP,
-    pur_inv_invoice_date DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    pur_inv_invoice_date DATE NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     pur_inv_total_product_value DECIMAL(18, 2) DEFAULT 0, -- Tổng tiền hàng (Gốc)
     pur_inv_total_discount DECIMAL(18, 2) DEFAULT 0,      -- Tổng chiết khấu toàn đơn

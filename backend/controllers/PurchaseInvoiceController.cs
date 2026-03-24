@@ -44,5 +44,33 @@ namespace PharmacyAPI.Controllers
             await _context.SaveChangesAsync();
             return NoContent();
         }
+
+        [HttpPatch("{id}/confirm-receipt")]
+        public async Task<IActionResult> ConfirmReceipt(int id, [FromBody] DateTime receivedDate)
+        {
+            var invoice = await _context.PurchaseInvoices.FindAsync(id);
+            
+            if (invoice == null) return NotFound("Không tìm thấy hóa đơn.");
+            
+            if (invoice.pur_inv_received_date.HasValue)
+            {
+                return BadRequest("Hóa đơn này đã được xác nhận nhập kho trước đó và không thể sửa đổi.");
+            }
+            
+            invoice.pur_inv_received_date = receivedDate;
+
+            try
+            {
+                await _context.SaveChangesAsync();
+                return Ok(new { message = "Xác nhận nhập kho thành công", date = receivedDate });
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                if (!InvoiceExists(id)) return NotFound();
+                throw;
+            }
+        }
+
+        private bool InvoiceExists(int id) => _context.PurchaseInvoices.Any(e => e.pur_inv_id == id);
     }
 }
