@@ -17,9 +17,10 @@ namespace PharmacyAPI.Models
         [Column(TypeName = "decimal(18,2)")] public decimal pur_inv_total_vat { get; set; }
         [Column(TypeName = "decimal(18,2)")] public decimal pur_inv_amount_paid { get; set; }
         public string? pur_inv_note { get; set; }
+
         [ForeignKey("staff_id")] public virtual Staff? Staff { get; set; }
         [ForeignKey("supplier_id")] public virtual Supplier? Supplier { get; set; }
-        public virtual ICollection<Batch> Batches { get; set; } = new List<Batch>();
+        public virtual ICollection<PurchaseInvoiceDetail>? PurchaseInvoiceDetails { get; set; }
 
         [NotMapped] public decimal TotalPayable => pur_inv_total_product_value - pur_inv_total_discount + pur_inv_total_vat;
         [NotMapped] public decimal RemainingDebt => TotalPayable - pur_inv_amount_paid;

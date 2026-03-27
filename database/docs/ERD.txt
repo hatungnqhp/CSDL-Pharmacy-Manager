@@ -41,6 +41,17 @@ erDiagram
 
         string pur_inv_note "Ghi chú"
     }
+
+    PURCHASE_INVOICE_DETAIL {
+        int pur_inv_dtl_id PK
+        int pur_inv_id FK
+        int batch_id FK
+        int pur_inv_dtl_import_qty "Số lượng nhập"
+        decimal pur_inv_dtl_cost_price_unit "Giá nhập hàng"
+        decimal pur_inv_dtl_discount_amount "Tiền chiết khấu"
+        decimal pur_inv_dtl_vat_amount  "Tiền VAT"
+    }
+
     STAFF {
         int staff_id PK
         string staff_full_name
@@ -52,22 +63,15 @@ erDiagram
         string supplier_name
         string supplier_phone
     }
+
     BATCH {
-        int batch_id PK "Mã lô hàng"
+        int batch_id PK
         int prod_id FK
-        int pur_inv_id FK
-        int prod_unit_id FK "Đơn vị nhập"
-
-        int batch_import_qty_pkg "Số lượng nhập (Đơn vị nhập)"
-        int batch_current_qty_base "Số lượng tồn (Đơn vị cơ bản)"
-
+        int prod_unit_id FK
         string batch_number "Số lô sản xuất"
         date batch_manufacturing_date "Ngày sản xuất"
         date batch_expiry_date "Hạn sử dụng"
-
-        decimal batch_cost_price_unit "Giá nhập hàng"
-        int batch_discount_amount "Tiền chiết khấu (%)"
-        int batch_vat_amount "Tiền VAT (%)"
+        int batch_current_qty "Số lượng tồn"
     }
 
     SELL_INVOICE {
@@ -95,18 +99,21 @@ erDiagram
         string customer_medical_history "Tiền sử bệnh/Dị ứng"
     }
 
-    CATEGORY ||--o{ PRODUCT : "categorizes"
     PRODUCT ||--o{ PRODUCT_UNIT : "has units"
-    PRODUCT ||--o{ BATCH : "managed by batches"
-
+    PRODUCT ||--o{ BATCH : "originates"
+    CATEGORY ||--o{ PRODUCT : "categorizes"
+    
     SUPPLIER ||--o{ PURCHASE_INVOICE : "supplies"
     STAFF ||--o{ PURCHASE_INVOICE : "creates"
-    PURCHASE_INVOICE ||--o{ BATCH : "contains items"
-
+    PURCHASE_INVOICE ||--o{ PURCHASE_INVOICE_DETAIL : "consists of"
+    
+    BATCH || PURCHASE_INVOICE_DETAIL : "recorded in"
+    BATCH ||--o{ SELL_INVOICE_DETAIL : "sourced from"
+    
+    PRODUCT_UNIT ||--o{ PURCHASE_INVOICE_DETAIL : "bought as"
+    PRODUCT_UNIT ||--o{ SELL_INVOICE_DETAIL : "sold as"
+    PRODUCT_UNIT ||--o{ BATCH : "stored as base"
+    
     STAFF ||--o{ SELL_INVOICE : "issues"
     CUSTOMER ||--o{ SELL_INVOICE : "purchases"
     SELL_INVOICE ||--o{ SELL_INVOICE_DETAIL : "consists of"
-
-    BATCH ||--o{ SELL_INVOICE_DETAIL : "sourced from"
-    PRODUCT_UNIT ||--o{ SELL_INVOICE_DETAIL : "sold as"
-    PRODUCT_UNIT ||--o{ BATCH : "imported as"

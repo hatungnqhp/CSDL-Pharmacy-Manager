@@ -8,7 +8,8 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 
 // 2. Đăng ký DbContext với MySQL (Pomelo Driver)
 builder.Services.AddDbContext<PharmacyContext>(options =>
-    options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString)));
+    options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString))
+           .EnableDetailedErrors());
 
 // 3. Thêm dịch vụ Controller (Thay thế cho Minimal API mặc định)
 builder.Services.AddControllers()

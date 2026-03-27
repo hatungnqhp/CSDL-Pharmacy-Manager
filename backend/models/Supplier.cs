@@ -9,5 +9,7 @@ namespace PharmacyAPI.Models
         [Key] [DatabaseGenerated(DatabaseGeneratedOption.Identity)] public int supplier_id { get; set; }
         [Required] [StringLength(255)] public string supplier_name { get; set; } = string.Empty;
         [StringLength(20)] public string? supplier_phone { get; set; }
+
+        public virtual ICollection<PurchaseInvoice>? PurchaseInvoices { get; set; }
     }
 }

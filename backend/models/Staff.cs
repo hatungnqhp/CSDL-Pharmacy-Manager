@@ -10,5 +10,8 @@ namespace PharmacyAPI.Models
         [Required] [StringLength(255)] public string staff_full_name { get; set; } = string.Empty;
         public DateTime? staff_birth_date { get; set; }
         [StringLength(20)] public string? staff_phone { get; set; }
+
+        public virtual ICollection<PurchaseInvoice>? PurchaseInvoices { get; set; }
+        public virtual ICollection<SellInvoice>? SellInvoices { get; set; }
     }
 }

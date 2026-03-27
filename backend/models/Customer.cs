@@ -11,5 +11,7 @@ namespace PharmacyAPI.Models
         [StringLength(20)] public string? customer_phone { get; set; }
         public string? customer_address { get; set; }
         public string? customer_medical_history { get; set; }
+
+        public virtual ICollection<SellInvoice>? SellInvoices { get; set; }
     }
 }

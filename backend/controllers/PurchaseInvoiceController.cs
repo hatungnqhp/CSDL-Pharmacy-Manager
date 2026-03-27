@@ -18,59 +18,98 @@ namespace PharmacyAPI.Controllers
             return await _context.PurchaseInvoices
                 .Include(i => i.Supplier)
                 .Include(i => i.Staff)
-                .OrderByDescending(i => i.pur_inv_received_date)
+                .OrderByDescending(i => i.pur_inv_id)
+                .AsNoTracking()
                 .ToListAsync();
         }
 
         [HttpPost]
-        public async Task<ActionResult<PurchaseInvoice>> CreateInvoice(PurchaseInvoice invoice)
+        public async Task<ActionResult<PurchaseInvoice>> CreateInvoice([FromBody] PurchaseInvoice invoice)
         {
-            _context.PurchaseInvoices.Add(invoice);
-            await _context.SaveChangesAsync();
-            return CreatedAtAction(nameof(GetInvoices), new { id = invoice.pur_inv_id }, invoice);
-        }
+            using var transaction = await _context.Database.BeginTransactionAsync();
+            try
+            {
+                // 1. Tách chi tiết để không bị EF tự động insert cascade kèm theo (dẫn đến cột phụ bất thường)
+                var details = invoice.PurchaseInvoiceDetails?.ToList();
+                invoice.PurchaseInvoiceDetails = null;
 
-        [HttpDelete("{id}")]
-        public async Task<IActionResult> DeleteInvoice(int id)
-        {
-            var invoice = await _context.PurchaseInvoices.FindAsync(id);
-            if (invoice == null) return NotFound();
+                // 2. Lưu header để lấy pur_inv_id
+                _context.PurchaseInvoices.Add(invoice);
+                await _context.SaveChangesAsync();
 
-            // Kiểm tra nếu đã có Batch liên quan thì không cho xóa (Constraint protection)
-            var hasBatches = await _context.Batches.AnyAsync(b => b.pur_inv_id == id);
-            if (hasBatches) return BadRequest("Không thể xóa hóa đơn đã có lô hàng nhập kho.");
+                if (details != null && details.Any())
+                {
+                    foreach (var detail in details)
+                    {
+                        // 3. Xử lý Batch nằm trong Detail
+                        if (detail.Batch != null)
+                        {
+                            detail.Batch.batch_current_qty = detail.pur_inv_dtl_import_qty;
 
-            _context.PurchaseInvoices.Remove(invoice);
-            await _context.SaveChangesAsync();
-            return NoContent();
+                            _context.Batches.Add(detail.Batch);
+                            await _context.SaveChangesAsync();
+
+                            detail.batch_id = detail.Batch.batch_id;
+                            detail.Batch = null;
+                        }
+
+                        // 4. Gán FK liên kết với Invoice header
+                        detail.pur_inv_id = invoice.pur_inv_id;
+                        detail.PurchaseInvoice = null;
+
+                        _context.PurchaseInvoiceDetails.Add(detail);
+                    }
+                    await _context.SaveChangesAsync();
+                }
+
+                await transaction.CommitAsync();
+
+                // Trả về record mới đầy đủ để frontend dùng
+                var created = await _context.PurchaseInvoices
+                    .Include(i => i.Supplier)
+                    .Include(i => i.Staff)
+                    .Include(i => i.PurchaseInvoiceDetails)
+                    .FirstOrDefaultAsync(i => i.pur_inv_id == invoice.pur_inv_id);
+
+                return Ok(created);
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                // Lấy lỗi sâu nhất từ MySQL để debug
+                var inner = ex.InnerException?.Message ?? ex.Message;
+                return StatusCode(500, new { message = "Lỗi SQL thực tế", detail = inner });
+            }
         }
 
         [HttpPatch("{id}/confirm-receipt")]
         public async Task<IActionResult> ConfirmReceipt(int id, [FromBody] DateTime receivedDate)
         {
             var invoice = await _context.PurchaseInvoices.FindAsync(id);
+            if (invoice == null) return NotFound();
             
-            if (invoice == null) return NotFound("Không tìm thấy hóa đơn.");
-            
-            if (invoice.pur_inv_received_date.HasValue)
-            {
-                return BadRequest("Hóa đơn này đã được xác nhận nhập kho trước đó và không thể sửa đổi.");
-            }
-            
-            invoice.pur_inv_received_date = receivedDate;
+            if (invoice.pur_inv_received_date.HasValue) 
+                return BadRequest("Hóa đơn đã xác nhận nhập kho trước đó.");
 
-            try
-            {
-                await _context.SaveChangesAsync();
-                return Ok(new { message = "Xác nhận nhập kho thành công", date = receivedDate });
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!InvoiceExists(id)) return NotFound();
-                throw;
-            }
+            invoice.pur_inv_received_date = receivedDate;
+            await _context.SaveChangesAsync();
+            return Ok(new { message = "Xác nhận thành công", date = receivedDate });
         }
 
-        private bool InvoiceExists(int id) => _context.PurchaseInvoices.Any(e => e.pur_inv_id == id);
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteInvoice(int id)
+        {
+            var invoice = await _context.PurchaseInvoices
+                .Include(i => i.PurchaseInvoiceDetails)
+                .FirstOrDefaultAsync(i => i.pur_inv_id == id);
+
+            if (invoice == null) return NotFound();
+            if (invoice.pur_inv_received_date.HasValue) 
+                return BadRequest("Không thể xóa hóa đơn đã nhập kho.");
+
+            _context.PurchaseInvoices.Remove(invoice);
+            await _context.SaveChangesAsync();
+            return NoContent();
+        }
     }
 }

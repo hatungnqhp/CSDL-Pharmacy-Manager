@@ -10,9 +10,10 @@ namespace PharmacyAPI.Models
         [Required] public int staff_id { get; set; }
         public int? customer_id { get; set; }
         public DateTime sell_inv_date { get; set; } = DateTime.Now;
-        [Column(TypeName = "decimal(15,2)")] public decimal sell_inv_total { get; set; }
+        [Column(TypeName = "decimal(18,2)")] public decimal sell_inv_total { get; set; }
+
         [ForeignKey("staff_id")] public virtual Staff? Staff { get; set; }
         [ForeignKey("customer_id")] public virtual Customer? Customer { get; set; }
-        public virtual ICollection<SellInvoiceDetail> Details { get; set; } = new List<SellInvoiceDetail>();
+        public virtual ICollection<SellInvoiceDetail>? SellInvoiceDetails { get; set; }
     }
 }
