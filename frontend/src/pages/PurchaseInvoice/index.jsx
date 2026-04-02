@@ -23,6 +23,8 @@ const PurchaseInvoice = () => {
   const [batches, setBatches] = useState([{ key: Date.now() }]);
   const [suppliers, setSuppliers] = useState([]);
   const [products, setProducts] = useState([]);
+  const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
+  const [supplierForm] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(dayjs().format('HH:mm:ss'));
 
@@ -228,6 +230,25 @@ const PurchaseInvoice = () => {
     }
   };
 
+  const handleAddSupplier = async (values) => {
+    try {
+      const res = await axios.post(`${API_BASE}/Supplier`, values);
+      message.success("Thêm nhà cung cấp thành công");
+      
+      // Cập nhật danh sách local để Select nhận được dữ liệu mới ngay lập tức
+      const newSupplier = res.data;
+      setSuppliers(prev => [...prev, newSupplier]);
+      
+      // Tự động chọn nhà cung cấp vừa tạo vào Form nhập hàng
+      form.setFieldsValue({ supplier_id: newSupplier.supplier_id });
+      
+      setIsSupplierModalOpen(false);
+      supplierForm.resetFields();
+    } catch (e) {
+      message.error("Lỗi khi thêm nhà cung cấp");
+    }
+  };
+
   const onFinish = async (values) => {
     setLoading(true);
     const summary = calculateSummary(values, batches);
@@ -331,15 +352,31 @@ const PurchaseInvoice = () => {
           {/* 1. Header: Mã hóa đơn, Nhà cung cấp, Ngày tháng */}
           <Space size="large" wrap>
             <Form.Item name="pur_inv_supplier_invoice_code" label="Số hóa đơn" rules={[{required: false}]}><Input placeholder="Nhập số hóa đơn..."/></Form.Item>
-            <Form.Item name="supplier_id" label="Nhà cung cấp" rules={[{required: true}]}>
-              <Select
-                placeholder="Chọn nhà cung cấp"
-                showSearch = {{optionFilterProp: "label"}}
-                options={suppliers.map(s => ({
-                  value: s.supplier_id,
-                  label: s.supplier_name
-                }))}
-              />
+            <Form.Item 
+              label="Nhà cung cấp" 
+              required // Hiện dấu * thủ công để chắc chắn
+            >
+              <Space.Compact style={{ width: '100%' }}>
+                <Form.Item
+                  name="supplier_id" // Tên biến phải nằm ở đây
+                  noStyle // Quan trọng: Để không làm vỡ layout
+                  rules={[{ required: true, message: 'Vui lòng chọn NCC' }]}
+                >
+                  <Select
+                    placeholder="Chọn nhà cung cấp"
+                    showSearch
+                    style={{ width: 250 }}
+                    options={suppliers.map(s => ({
+                      value: s.supplier_id,
+                      label: s.supplier_name
+                    }))}
+                  />
+                </Form.Item>
+                <Button 
+                  icon={<PlusOutlined />} 
+                  onClick={() => setIsSupplierModalOpen(true)} 
+                />
+              </Space.Compact>
             </Form.Item>
             <Form.Item name="pur_inv_invoice_date" label="Ngày hóa đơn" rules={[{required: true}]}> 
               <DatePicker
@@ -381,7 +418,7 @@ const PurchaseInvoice = () => {
                 }))}
               />
               </Form.Item>
-              <Form.Item name={`batch_number_${batch.key}`} label="Số lô" style={{flex: 1.5}} rules={[{required: false}]}>
+              <Form.Item name={`batch_number_${batch.key}`} label="Số lô" style={{flex: 1.5}} rules={[{required: true}]}>
                 <Input placeholder="Nhập số lô..." />
               </Form.Item>
               <Form.Item shouldUpdate={(prev, curr) => prev[`prod_id_${batch.key}`] !== curr[`prod_id_${batch.key}`]} noStyle>
@@ -402,7 +439,7 @@ const PurchaseInvoice = () => {
               </Form.Item>
 
               <Form.Item name={`cost_${batch.key}`} label="Giá nhập" style={{flex: 2}} rules={[{required: true}]}><InputNumber min={0} step={1000} placeholder="Nhập giá..." formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')} style={{width: '100%'} }/></Form.Item>
-              <Form.Item name={`qty_${batch.key}`} label="Số lượng" style={{flex: 1.5}} rules={[{required: true}]}><InputNumber min={1} step={1} defaultValue={1} placeholder="Nhập số lượng..." style={{width: '100%'}}/></Form.Item>
+              <Form.Item name={`qty_${batch.key}`} label="Số lượng" style={{flex: 1.5}} rules={[{required: true}]}><InputNumber min={1} step={1} placeholder="Nhập số lượng..." style={{width: '100%'}}/></Form.Item>
               <Form.Item name={`expiry_${batch.key}`} label="Hạn dùng" style={{flex: 2}} rules={[{required: true}]}><DatePicker style={{width: '100%'}}/></Form.Item>
               
               <Button type="text" danger onClick={() => removeBatchRow(batch.key)} icon={<DeleteOutlined />} style={{marginTop: '32px'}} />
@@ -471,6 +508,30 @@ const PurchaseInvoice = () => {
           style={{ width: '100%' }}
           allowClear={false}
         />
+      </Modal>
+
+      <Modal 
+        title="Thêm Nhà cung cấp mới" 
+        open={isSupplierModalOpen} 
+        onOk={() => supplierForm.submit()} 
+        onCancel={() => setIsSupplierModalOpen(false)}
+        okText="Lưu NCC"
+        cancelText="Hủy"
+        destroyOnHidden={true}
+        getContainer={() => document.body}
+      >
+        <Form form={supplierForm} layout="vertical" onFinish={handleAddSupplier}>
+          <Form.Item 
+            name="supplier_name" 
+            label="Tên nhà cung cấp" 
+            rules={[{ required: true, message: 'Vui lòng nhập tên' }]}
+          >
+            <Input placeholder="Nhập tên nhà cung cấp..." />
+          </Form.Item>
+          <Form.Item name="supplier_phone" label="Số điện thoại">
+            <Input placeholder="Nhập số điện thoại..." />
+          </Form.Item>
+        </Form>
       </Modal>
 
     </div>

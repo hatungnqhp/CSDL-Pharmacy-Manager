@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Card, Button, Input, InputNumber, Space, Tag, Modal, Form, Select, Typography, Divider, Row, Col, message } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, FolderOpenOutlined, MedicineBoxOutlined, HistoryOutlined } from '@ant-design/icons';
+import { Table, Card, Button, Input, InputNumber, Space, Tag, Modal, Form, Select, Typography, Divider, Row, Col, message, Popconfirm } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, FolderOpenOutlined, MedicineBoxOutlined, HistoryOutlined, ClearOutlined } from '@ant-design/icons';
 import axios from 'axios';
 import dayjs from 'dayjs';
 
@@ -13,12 +13,15 @@ const Products = () => {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchText, setSearchText] = useState('');
+  const [selectedCategoryId, setSelectedCategoryId] = useState(null); // State lọc danh mục
   const [lastUpdated, setLastUpdated] = useState(dayjs().format('HH:mm:ss'));
   
   // Modal states
   const [isProdModalOpen, setIsProdModalOpen] = useState(false);
   const [isCatModalOpen, setIsCatModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
+  const [editingCategory, setEditingCategory] = useState(null); // State sửa danh mục
+
   const [prodForm] = Form.useForm();
   const [catForm] = Form.useForm();
   const [productUnits, setProductUnits] = useState([{ key: Date.now(), prod_unit_exchange_value: 1 }]);
@@ -42,49 +45,48 @@ const Products = () => {
 
   useEffect(() => { fetchData(); }, []);
 
-  // --- Column Definitions ---
-  const columns = [
-    {
-      title: 'Tên mặt hàng',
-      dataIndex: 'prod_name',
-      key: 'prod_name',
-      render: (text, record) => (
-        <Space orientation="vertical" size={0}>
-          <Text strong>{text}</Text>
-          <Text type="secondary" style={{ fontSize: '12px' }}>SĐK: {record.prod_registration_number}</Text>
-        </Space>
-      ),
-    },
-    {
-      title: 'Danh mục',
-      dataIndex: 'category_id',
-      render: (catId) => {
-        const cat = categories.find(c => c.category_id === catId);
-        return <Tag color="blue">{cat?.category_name || "N/A"}</Tag>;
-      }
-    },
-    {
-      title: 'Hãng sản xuất',
-      dataIndex: 'prod_manufacturer',
-      render: (text, record) => (
-        <Space orientation="vertical" size={0}>
-          <Text>{text}</Text>
-          <Text type="secondary" style={{ fontSize: '12px' }}>{record.prod_country}</Text>
-        </Space>
-      ),
-    },
-    {
-      title: 'Thao tác',
-      key: 'action',
-      render: (_, record) => (
-        <Space>
-          <Button type="link" icon={<EditOutlined />} onClick={() => handleEditProduct(record)}>Sửa</Button>
-        </Space>
-      ),
+  // --- LOGIC DANH MỤC (FIX LỖI & FILTER) ---
+  const handleOpenCatModal = (category = null) => {
+    if (category) {
+      setEditingCategory(category);
+      catForm.setFieldsValue({
+        category_name: category.category_name,
+        category_description: category.category_description
+      });
+    } else {
+      setEditingCategory(null);
+      catForm.resetFields();
     }
-  ];
+    setIsCatModalOpen(true);
+  };
 
-  // --- Logic Handlers ---
+  const onCategoryFinish = async (values) => {
+    try {
+      if (editingCategory) {
+        await axios.put(`${API_BASE}/Category/${editingCategory.category_id}`, {
+          ...editingCategory,
+          ...values
+        });
+        message.success("Cập nhật danh mục thành công");
+      } else {
+        await axios.post(`${API_BASE}/Category`, values);
+        message.success("Thêm danh mục mới thành công");
+      }
+      setIsCatModalOpen(false);
+      fetchData();
+    } catch (e) { message.error("Lỗi lưu danh mục"); }
+  };
+
+  const handleDeleteCategory = async (id) => {
+    try {
+      await axios.delete(`${API_BASE}/Category/${id}`);
+      message.success("Xóa danh mục thành công");
+      if (selectedCategoryId === id) setSelectedCategoryId(null);
+      fetchData();
+    } catch (e) { message.error("Không thể xóa danh mục đang có hàng"); }
+  };
+
+  // --- LOGIC MẶT HÀNG ---
   const handleEditProduct = async (product) => {
     try {
       const res = await axios.get(`${API_BASE}/Product/${product.prod_id}`);
@@ -114,27 +116,12 @@ const Products = () => {
       } else {
         setProductUnits([{ key: Date.now(), prod_unit_exchange_value: 1 }]);
       }
-
       setIsProdModalOpen(true);
-    } catch (e) {
-      message.error("Không tải được thông tin đơn vị. Vui lòng thử lại.");
-    }
-  };
-
-  const addProductUnit = () => {
-    setProductUnits([...productUnits, { key: Date.now(), prod_unit_exchange_value: 1 }]);
-  };
-
-  const removeProductUnit = (key) => {
-    if (productUnits.length > 1) {
-      setProductUnits(productUnits.filter(u => u.key !== key));
-    }
+    } catch (e) { message.error("Lỗi tải thông tin mặt hàng"); }
   };
 
   const handleUnitChange = (key, field, value) => {
-    setProductUnits(productUnits.map(u => 
-      u.key === key ? { ...u, [field]: value } : u
-    ));
+    setProductUnits(productUnits.map(u => u.key === key ? { ...u, [field]: value } : u));
   };
 
   const onProductFinish = async (values) => {
@@ -162,14 +149,21 @@ const Products = () => {
     } catch (e) { message.error("Lỗi lưu dữ liệu"); }
   };
 
-  const onCategoryFinish = async (values) => {
+  // --- FILTER LOGIC ---
+  const filteredProducts = products.filter(p => {
+    const matchSearch = p.prod_name.toLowerCase().includes(searchText.toLowerCase());
+    const matchCategory = selectedCategoryId ? p.category_id === selectedCategoryId : true;
+    return matchSearch && matchCategory;
+  });
+
+  const handleDeleteProduct = async (id) => {
     try {
-      await axios.post(`${API_BASE}/Category`, values);
-      message.success("Thêm danh mục mới thành công");
-      setIsCatModalOpen(false);
-      catForm.resetFields();
-      fetchData();
-    } catch (e) { message.error("Lỗi thêm danh mục"); }
+      await axios.delete(`${API_BASE}/Product/${id}`);
+      message.success("Xóa mặt hàng thành công");
+      fetchData(); // Tải lại danh sách sau khi xóa
+    } catch (e) {
+      message.error("Lỗi khi xóa mặt hàng");
+    }
   };
 
   return (
@@ -178,17 +172,33 @@ const Products = () => {
         {/* CỘT TRÁI: DANH MỤC */}
         <Col span={6}>
           <Card title={<Space><FolderOpenOutlined /><span>Danh mục</span></Space>} 
-                extra={<Button type="link" icon={<PlusOutlined />} onClick={() => setIsCatModalOpen(true)} />}>
+                extra={
+                  <Space>
+                    {selectedCategoryId && <Button size="small" type="text" icon={<ClearOutlined />} onClick={() => setSelectedCategoryId(null)} />}
+                    <Button type="link" icon={<PlusOutlined />} onClick={() => handleOpenCatModal()} />
+                  </Space>
+                }>
             <Table 
               dataSource={categories}
               rowKey="category_id"
               pagination={{ pageSize: 10, size: 'small' }}
+              onRow={(record) => ({
+                onClick: () => setSelectedCategoryId(record.category_id),
+                style: { cursor: 'pointer', background: selectedCategoryId === record.category_id ? '#e6f7ff' : 'transparent' }
+              })}
               columns={[
                 { title: 'Tên nhóm', dataIndex: 'category_name' },
                 { 
                   title: '', 
                   key: 'op', 
-                  render: (_, r) => <Text type="secondary">{products.filter(p => p.category_id === r.category_id).length}</Text> 
+                  render: (_, r) => (
+                    <Space onClick={e => e.stopPropagation()}>
+                      <Button type="text" size="small" icon={<EditOutlined style={{fontSize: 12}}/>} onClick={() => handleOpenCatModal(r)} />
+                      <Popconfirm title="Xóa nhóm này?" onConfirm={() => handleDeleteCategory(r.category_id)}>
+                        <Button type="text" size="small" danger icon={<DeleteOutlined style={{fontSize: 12}}/>} />
+                      </Popconfirm>
+                    </Space>
+                  ) 
                 }
               ]}
               size="small"
@@ -220,53 +230,89 @@ const Products = () => {
 
             <Table 
               loading={loading}
-              dataSource={products.filter(p => p.prod_name.toLowerCase().includes(searchText.toLowerCase()))}
-              columns={columns}
+              dataSource={filteredProducts}
               rowKey="prod_id"
+              columns={[
+                {
+                  title: 'Tên mặt hàng',
+                  dataIndex: 'prod_name',
+                  key: 'prod_name',
+                  render: (text, record) => (
+                    <Space direction="vertical" size={0}>
+                      <Text strong>{text}</Text>
+                      <Text type="secondary" style={{ fontSize: '12px' }}>{record.prod_registration_number}</Text>
+                    </Space>
+                  ),
+                },
+                {
+                  title: 'Danh mục',
+                  dataIndex: 'category_id',
+                  render: (catId) => {
+                    const cat = categories.find(c => c.category_id === catId);
+                    return <Tag color="blue">{cat?.category_name || "N/A"}</Tag>;
+                  }
+                },
+                {
+                  title: 'Hãng sản xuất',
+                  dataIndex: 'prod_manufacturer',
+                  render: (text, record) => (
+                    <Space direction="vertical" size={0}>
+                      <Text>{text}</Text>
+                      <Text type="secondary" style={{ fontSize: '12px' }}>{record.prod_country}</Text>
+                    </Space>
+                  ),
+                },
+                {
+                  title: 'Thao tác',
+                  key: 'action',
+                  width: 150, // Tăng độ rộng để chứa 2 nút
+                  render: (_, record) => (
+                    <Space>
+                      <Button type="link" icon={<EditOutlined />} onClick={() => handleEditProduct(record)}>
+                        Sửa
+                      </Button>
+                      <Popconfirm
+                        title="Xác nhận xóa?"
+                        description="Bạn có chắc chắn muốn xóa mặt hàng này không?"
+                        onConfirm={() => handleDeleteProduct(record.prod_id)}
+                        okText="Xóa"
+                        cancelText="Hủy"
+                        okButtonProps={{ danger: true }}
+                      >
+                        <Button type="link" danger icon={<DeleteOutlined />}>
+                          Xóa
+                        </Button>
+                      </Popconfirm>
+                    </Space>
+                  ),
+                }
+              ]}
             />
           </Card>
         </Col>
       </Row>
 
-      {/* MODAL THÊM/SỬA MẶT HÀNG */}
-      <Modal 
-        title={editingProduct ? "Chỉnh sửa mặt hàng" : "Thêm mặt hàng mới"} 
-        open={isProdModalOpen} 
-        onOk={() => prodForm.submit()} 
-        onCancel={() => setIsProdModalOpen(false)}
-        width={700}
-      >
+      {/* MODAL DANH MỤC */}
+      <Modal title={editingCategory ? "Chỉnh sửa danh mục" : "Thêm danh mục mới"} open={isCatModalOpen} onOk={() => catForm.submit()} onCancel={() => setIsCatModalOpen(false)} destroyOnClose>
+        <Form form={catForm} layout="vertical" onFinish={onCategoryFinish}>
+          <Form.Item name="category_name" label="Tên danh mục" rules={[{required: true}]}><Input /></Form.Item>
+          <Form.Item name="category_description" label="Mô tả"><Input.TextArea /></Form.Item>
+        </Form>
+      </Modal>
+
+      {/* MODAL MẶT HÀNG (GIỮ NGUYÊN FORM CỦA BẠN) */}
+      <Modal title={editingProduct ? "Chỉnh sửa mặt hàng" : "Thêm mặt hàng mới"} open={isProdModalOpen} onOk={() => prodForm.submit()} onCancel={() => setIsProdModalOpen(false)} width={700}>
         <Form form={prodForm} layout="vertical" onFinish={onProductFinish}>
           <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item name="prod_name" label="Tên mặt hàng" rules={[{required: true}]}><Input /></Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="category_id" label="Danh mục" rules={[{required: true}]}>
-                <Select options={categories.map(c => ({value: c.category_id, label: c.category_name}))} />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="prod_national_code" label="Mã dược quốc gia"><Input /></Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="prod_registration_number" label="Số đăng ký"><Input /></Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="prod_manufacturer" label="Hãng sản xuất"><Input /></Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="prod_country" label="Quốc gia"><Input /></Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="prod_active_ingredient" label="Hoạt chất chính"><Input /></Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="prod_dosage" label="Liều lượng"><Input /></Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="prod_registration_ingredient" label="Hoạt chính đăng ký"><Input /></Form.Item>
-            </Col>
+            <Col span={12}><Form.Item name="prod_name" label="Tên mặt hàng" rules={[{required: true}]}><Input /></Form.Item></Col>
+            <Col span={12}><Form.Item name="category_id" label="Danh mục" rules={[{required: true}]}><Select options={categories.map(c => ({value: c.category_id, label: c.category_name}))} /></Form.Item></Col>
+            <Col span={12}><Form.Item name="prod_national_code" label="Mã dược quốc gia"><Input /></Form.Item></Col>
+            <Col span={12}><Form.Item name="prod_registration_number" label="Số đăng ký" rules={[{required: true}]}><Input /></Form.Item></Col>
+            <Col span={12}><Form.Item name="prod_manufacturer" label="Hãng sản xuất"><Input /></Form.Item></Col>
+            <Col span={12}><Form.Item name="prod_country" label="Quốc gia"><Input /></Form.Item></Col>
+            <Col span={12}><Form.Item name="prod_active_ingredient" label="Hoạt chất chính"><Input /></Form.Item></Col>
+            <Col span={12}><Form.Item name="prod_dosage" label="Liều lượng"><Input /></Form.Item></Col>
+            <Col span={24}><Form.Item name="prod_registration_ingredient" label="Hoạt chính đăng ký"><Input /></Form.Item></Col>
           </Row>
 
           <Divider>Đơn vị tính</Divider>
@@ -274,76 +320,25 @@ const Products = () => {
             <Row key={unit.key} gutter={16} align="middle" style={{ marginBottom: 8 }}>
               <Col span={index === 0 ? 12 : 6}>
                 <Form.Item label={index === 0 ? "Đơn vị cơ bản" : "Tên đơn vị"} required>
-                  <Input 
-                    placeholder="Ví dụ: Viên"
-                    value={unit.prod_unit_name}
-                    onChange={(e) => handleUnitChange(unit.key, 'prod_unit_name', e.target.value)}
-                  />
+                  <Input placeholder="Ví dụ: Viên" value={unit.prod_unit_name} onChange={(e) => handleUnitChange(unit.key, 'prod_unit_name', e.target.value)} />
                 </Form.Item>
               </Col>
-              {index === 0 && (
+              {index > 0 && (
                 <Col span={6}>
-                  <Form.Item label="Giá bán niêm yết">
-                    <InputNumber 
-                      min={0}
-                      step={1000}
-                      value={unit.prod_unit_price}
-                      onChange={(value) => handleUnitChange(unit.key, 'prod_unit_price', value || 0)}
-                      style={{ width: '100%' }}
-                      formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                    />
+                  <Form.Item label="Giá trị quy đổi" required>
+                    <InputNumber min={1} value={unit.prod_unit_exchange_value} onChange={(value) => handleUnitChange(unit.key, 'prod_unit_exchange_value', value || 1)} style={{ width: '100%' }} />
                   </Form.Item>
                 </Col>
               )}
-              {index > 0 && (
-                <>
-                  <Col span={6}>
-                    <Form.Item label="Giá trị quy đổi" required>
-                      <InputNumber 
-                        min={1}
-                        value={unit.prod_unit_exchange_value}
-                        onChange={(value) => handleUnitChange(unit.key, 'prod_unit_exchange_value', value || 1)}
-                        style={{ width: '100%' }}
-                      />
-                    </Form.Item>
-                  </Col>
-                  <Col span={6}>
-                    <Form.Item label="Giá bán niêm yết">
-                      <InputNumber 
-                        min={0}
-                        step={1000}
-                        value={unit.prod_unit_price}
-                        onChange={(value) => handleUnitChange(unit.key, 'prod_unit_price', value || 0)}
-                        style={{ width: '100%' }}
-                        formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                      />
-                    </Form.Item>
-                  </Col>
-                  <Col span={6}>
-                    <Button 
-                      type="text" 
-                      danger 
-                      icon={<DeleteOutlined />} 
-                      onClick={() => removeProductUnit(unit.key)}
-                    >
-                      Xóa
-                    </Button>
-                  </Col>
-                </>
-              )}
+              <Col span={6}>
+                <Form.Item label="Giá bán niêm yết">
+                  <InputNumber min={0} step={1000} value={unit.prod_unit_price} onChange={(value) => handleUnitChange(unit.key, 'prod_unit_price', value || 0)} style={{ width: '100%' }} formatter={value => `${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')} />
+                </Form.Item>
+              </Col>
+              {index > 0 && <Col span={6}><Button type="text" danger icon={<DeleteOutlined />} onClick={() => setProductUnits(productUnits.filter(u => u.key !== unit.key))}>Xóa</Button></Col>}
             </Row>
           ))}
-          <Button type="dashed" onClick={addProductUnit} block icon={<PlusOutlined />}>
-            Thêm đơn vị tính
-          </Button>
-        </Form>
-      </Modal>
-
-      {/* MODAL THÊM DANH MỤC */}
-      <Modal title="Thêm danh mục mới" open={isCatModalOpen} onOk={() => catForm.submit()} onCancel={() => setIsCatModalOpen(false)}>
-        <Form form={catForm} layout="vertical" onFinish={onCategoryFinish}>
-          <Form.Item name="category_name" label="Tên danh mục" rules={[{required: true}]}><Input /></Form.Item>
-          <Form.Item name="category_description" label="Mô tả"><Input.TextArea /></Form.Item>
+          <Button type="dashed" onClick={() => setProductUnits([...productUnits, { key: Date.now(), prod_unit_exchange_value: 1 }])} block icon={<PlusOutlined />}>Thêm đơn vị tính</Button>
         </Form>
       </Modal>
     </div>

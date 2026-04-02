@@ -171,17 +171,17 @@ const Batchs = () => {
                 { value: 'all', label: 'Tất cả lô hàng' },
                 { value: 'in_stock', label: 'Lô còn hàng' },
                 { value: 'out_of_stock', label: 'Lô đã hết hàng' },
-                { value: 'expiring', label: 'Lô sắp hết hạn (6 tháng)' },
+                { value: 'expiring', label: 'Lô sắp hết hạn' },
               ]}
             />
           </Space>
           
           <Space>
             <Badge count={filteredData.length} overflowCount={999} color="#1890ff">
-              <Text type="secondary" style={{ marginRight: 10 }}>Kết quả: {filteredData.length}</Text>
+              <Text type="secondary" style={{ marginRight: 10 }}>Số lượng: {filteredData.length}</Text>
             </Badge>
             <HistoryOutlined />
-            <Text type="secondary">{dayjs().format('HH:mm:ss')}</Text>
+            <Text type="secondary">Cập nhật lần cuối: {dayjs().format('HH:mm:ss')}</Text>
           </Space>
         </div>
 

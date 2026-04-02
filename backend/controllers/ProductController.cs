@@ -21,6 +21,23 @@ namespace PharmacyAPI.Controllers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<object>>> GetProducts()
         {
+            /*
+            SELECT 
+                p.*,
+                c.category_name,
+                c.category_description,
+                (SELECT 
+                    pu.prod_unit_id, 
+                    pu.prod_unit_name, 
+                    pu.prod_unit_exchange_value, 
+                    pu.prod_unit_price 
+                FROM ProductUnits pu 
+                WHERE pu.prod_id = p.prod_id 
+                FOR JSON PATH) AS productUnits
+            FROM Products p
+            LEFT JOIN Categories c ON p.category_id = c.category_id;
+            */
+
             var products = await _context.Products
                 .Select(p => new
                 {
@@ -54,6 +71,36 @@ namespace PharmacyAPI.Controllers
         [HttpGet("{id}")]
         public async Task<ActionResult<object>> GetProduct(int id)
         {
+            /*
+            SELECT 
+                p.prod_id,
+                p.category_id,
+                p.prod_national_code,
+                p.prod_name,
+                p.prod_registration_number,
+                p.prod_active_ingredient,
+                p.prod_registration_ingredient,
+                p.prod_dosage,
+                p.prod_manufacturer,
+                p.prod_country,
+                -- Thông tin danh mục
+                c.category_name,
+                c.category_description,
+                -- Danh sách đơn vị tính (Nested JSON)
+                (SELECT 
+                    pu.prod_id,
+                    pu.prod_unit_id,
+                    pu.prod_unit_name,
+                    pu.prod_unit_exchange_value,
+                    pu.prod_unit_price
+                FROM ProductUnits pu
+                WHERE pu.prod_id = p.prod_id
+                FOR JSON PATH) AS productUnits
+            FROM Products p
+            LEFT JOIN Categories c ON p.category_id = c.category_id
+            WHERE p.prod_id = @id;
+            */
+
             var product = await _context.Products
                 .Include(p => p.Category)
                 .Include(p => p.ProductUnits)
@@ -92,6 +139,19 @@ namespace PharmacyAPI.Controllers
         [HttpGet("search")]
         public async Task<ActionResult> SearchProducts(string? q)
         {
+            /*
+            SELECT 
+                p.prod_id, 
+                p.prod_name,
+                (SELECT 
+                    pu.prod_unit_id, pu.prod_unit_name, pu.prod_unit_price 
+                FROM ProductUnits pu 
+                WHERE pu.prod_id = p.prod_id 
+                FOR JSON PATH) AS units
+            FROM Products p
+            WHERE p.prod_name LIKE N'%' + @q + '%' OR @q IS NULL;
+            */
+
             var query = _context.Products.AsQueryable();
 
             if (!string.IsNullOrEmpty(q))
@@ -119,6 +179,16 @@ namespace PharmacyAPI.Controllers
         [HttpPost]
         public async Task<ActionResult<Product>> PostProduct(Product product)
         {
+            /*
+            INSERT INTO Products (
+                category_id, prod_national_code, prod_name, 
+                prod_registration_number, prod_active_ingredient, 
+                prod_dosage, prod_manufacturer, prod_country
+            )
+            VALUES (@catId, @natCode, @name, @regNum, @ingredient, @dosage, @factory, @country);
+            DECLARE @new_prod_id INT = SCOPE_IDENTITY();
+            */
+
             if (!ModelState.IsValid)
             {
                 return BadRequest(ModelState);
@@ -187,6 +257,16 @@ namespace PharmacyAPI.Controllers
         [HttpPut("{id}")]
         public async Task<IActionResult> PutProduct(int id, Product product)
         {
+            /*
+            INSERT INTO Products (
+                category_id, prod_national_code, prod_name, 
+                prod_registration_number, prod_active_ingredient, 
+                prod_dosage, prod_manufacturer, prod_country
+            )
+            VALUES (@catId, @natCode, @name, @regNum, @ingredient, @dosage, @factory, @country);
+            DECLARE @new_prod_id INT = SCOPE_IDENTITY();
+            */
+
             if (id != product.prod_id)
             {
                 return BadRequest();
@@ -233,6 +313,11 @@ namespace PharmacyAPI.Controllers
                 var maxUnitId = existingUnits.Any() ? existingUnits.Max(u => u.prod_unit_id) : 0;
                 foreach (var unit in incomingUnits)
                 {
+                    /*
+                    INSERT INTO ProductUnits (prod_id, prod_unit_id, prod_unit_name, prod_unit_exchange_value, prod_unit_price)
+                    VALUES (@new_prod_id, @unitId, @unitName, @exchangeVal, @price);
+                    */
+
                     if (unit.prod_unit_id > 0)
                     {
                         var existingUnit = existingUnits.FirstOrDefault(u => u.prod_unit_id == unit.prod_unit_id);
@@ -266,6 +351,50 @@ namespace PharmacyAPI.Controllers
             {
                 await transaction.RollbackAsync();
                 return StatusCode(500, $"Lỗi hệ thống: {ex.Message} | Inner: {ex.GetBaseException()?.Message} | Full: {ex}");
+            }
+        }
+
+        // DELETE: api/product/5
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> DeleteProduct(int id)
+        {
+            /*
+            DELETE FROM ProductUnits WHERE prod_id = @id;
+            DELETE FROM Products WHERE prod_id = @id;
+            */
+
+            using var transaction = await _context.Database.BeginTransactionAsync();
+
+            try
+            {
+                var product = await _context.Products
+                    .Include(p => p.ProductUnits)
+                    .FirstOrDefaultAsync(p => p.prod_id == id);
+
+                if (product == null)
+                {
+                    return NotFound(new { message = "Không tìm thấy mặt hàng cần xóa" });
+                }
+
+                // 1. Xóa các đơn vị tính liên quan trước (nếu database chưa cài ON DELETE CASCADE)
+                if (product.ProductUnits != null && product.ProductUnits.Any())
+                {
+                    _context.ProductUnits.RemoveRange(product.ProductUnits);
+                }
+
+                // 2. Xóa mặt hàng chính
+                _context.Products.Remove(product);
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                return Ok(new { message = "Xóa mặt hàng thành công" });
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                var baseMessage = ex.GetBaseException()?.Message;
+                return StatusCode(500, $"Lỗi hệ thống khi xóa: {ex.Message} | {baseMessage}");
             }
         }
     }

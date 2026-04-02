@@ -10,7 +10,7 @@ CREATE TABLE PRODUCT (
     category_id INT NOT NULL,
     prod_national_code VARCHAR(50) UNIQUE,
     prod_name VARCHAR(255) NOT NULL,
-    prod_registration_number VARCHAR(100) UNIQUE,
+    prod_registration_number VARCHAR(100) NOT NULL UNIQUE,
     prod_active_ingredient TEXT,
     prod_registration_ingredient TEXT,
     prod_dosage VARCHAR(100),
@@ -42,7 +42,7 @@ CREATE TABLE STAFF (
 CREATE TABLE SUPPLIER (
     supplier_id INT PRIMARY KEY AUTO_INCREMENT,
     supplier_name VARCHAR(255) NOT NULL,
-    supplier_phone VARCHAR(20)
+    supplier_phone VARCHAR(20) UNIQUE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE CUSTOMER (
