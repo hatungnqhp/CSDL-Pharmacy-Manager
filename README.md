@@ -7,7 +7,7 @@
 
 ## 2. Thành viên thực hiện
 - **Hà Quang Tùng B24DCGA158**: Phát triển Fullstack, thiết kế database.
-- **Tô Nữ Ngân Châu B24DCGA018**: Thiết kế CSDL quan hệ, chuẩn hóa, ràng buộc.
+- **Tôn Nữ Ngân Châu B24DCGA018**: Thiết kế CSDL quan hệ, chuẩn hóa, ràng buộc.
 - **Ngô Văn Kiệt B24DCGA082**: Xây dựng mô hình thực thể liên kết, chuẩn bị tài liệu kỹ thuật và thuyết trình.
 
 ## 3. Kiến trúc công nghệ
