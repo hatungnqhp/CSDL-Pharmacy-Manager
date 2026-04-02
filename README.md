@@ -6,9 +6,9 @@
 - **Bối cảnh:** Giải quyết các vấn đề về sai lệch dữ liệu nhập thực tế và rủi ro thuốc hết hạn trong các nhà thuốc vừa và nhỏ.
 
 ## 2. Thành viên thực hiện
-- **Tùng**: Phát triển Fullstack, thiết kế database.
-- **Châu**: Thiết kế CSDL quan hệ, chuẩn hóa, ràng buộc.
-- **Kiệt**: Xây dựng mô hình thực thể liên kết, chuẩn bị tài liệu kỹ thuật và thuyết trình.
+- **Hà Quang Tùng B24DCGA158**: Phát triển Fullstack, thiết kế database.
+- **Tô Nữ Ngân Châu B24DCGA018**: Thiết kế CSDL quan hệ, chuẩn hóa, ràng buộc.
+- **Ngô Văn Kiệt B24DCGA082**: Xây dựng mô hình thực thể liên kết, chuẩn bị tài liệu kỹ thuật và thuyết trình.
 
 ## 3. Kiến trúc công nghệ
 Hệ thống được phát triển trên mô hình Client-Server tách biệt:
